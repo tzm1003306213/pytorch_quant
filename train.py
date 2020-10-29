@@ -17,13 +17,15 @@ except ImportError:
 
 import kqat
 from models import mobilenet_v2
+from models.timm.models import create_model
 from optim.optim_factory import create_optimizer_rcf, create_optimizer
 
 from timm.data import Dataset, create_loader
 from timm.scheduler import create_scheduler
 
 
-def train_one_epoch(model, criterion, optimizer, optimizer_rcf, data_loader, device, epoch, print_freq, apex=False):
+def train_one_epoch(model, criterion, optimizer, optimizer_rcf, data_loader, device, epoch, print_freq,
+                    lr_scheduler=None, lr_scheduler_rcf=None, apex=False):
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value}'))
@@ -31,6 +33,8 @@ def train_one_epoch(model, criterion, optimizer, optimizer_rcf, data_loader, dev
     metric_logger.add_meter('img/s', utils.SmoothedValue(window_size=10, fmt='{value}'))
 
     header = 'Epoch: [{}]'.format(epoch)
+    num_updates = epoch * len(data_loader)
+
     for image, target in metric_logger.log_every(data_loader, print_freq, header):
         start_time = time.time()
         image, target = image.to(device), target.to(device)
@@ -55,6 +59,13 @@ def train_one_epoch(model, criterion, optimizer, optimizer_rcf, data_loader, dev
         metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
         metric_logger.meters['acc5'].update(acc5.item(), n=batch_size)
         metric_logger.meters['img/s'].update(batch_size / (time.time() - start_time))
+
+        num_updates += 1
+        if lr_scheduler is not None:
+            lr_scheduler.step_update(num_updates=num_updates)
+
+        if lr_scheduler_rcf is not None:
+            lr_scheduler_rcf.step_update(num_updates=num_updates)
 
 
 def evaluate(model, criterion, data_loader, device, print_freq=100):
@@ -138,7 +149,22 @@ def main(args):
     )
 
     print("Creating model")
-    model = mobilenet_v2(pretrained=True, bn_momentum=args.bn_momentum)
+    if args.model == 'mobilenet_v2':
+        model = mobilenet_v2(pretrained=args.pretrained, bn_momentum=args.bn_momentum)
+    else:
+        model = create_model(
+            args.model,
+            pretrained=args.pretrained,
+            num_classes=1000,
+            drop_rate=0.0,
+            drop_connect_rate=None,  # DEPRECATED, use drop_path
+            drop_path_rate=None,
+            drop_block_rate=None,
+            global_pool=None,
+            bn_tf=False,
+            bn_momentum=args.bn_momentum,
+            bn_eps=None,
+            checkpoint_path='')
 
     if args.qat:
         print("quant model")
@@ -185,14 +211,20 @@ def main(args):
         evaluate(model, criterion, loader_eval, device=device)
         return
 
+    if lr_scheduler is not None and args.start_epoch > 0:
+        lr_scheduler.step(args.start_epoch)
+        if args.qat:
+            lr_scheduler_rcf.step(args.start_epoch)
+
     print("Start training")
     start_time = time.time()
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             loader_train.sampler.set_epoch(epoch)
-        train_one_epoch(model, criterion, optimizer, optimizer_rcf, loader_train, device, epoch, args.print_freq, args.apex)
-        lr_scheduler.step(epoch)
-        lr_scheduler_rcf.step(epoch)
+        train_one_epoch(model, criterion, optimizer, optimizer_rcf, loader_train, device,
+                        epoch, args.print_freq, lr_scheduler, lr_scheduler_rcf, args.apex)
+        lr_scheduler.step(epoch + 1)
+        lr_scheduler_rcf.step(epoch + 1)
         evaluate(model, criterion, loader_eval, device=device)
         if args.output_dir:
             checkpoint = {
