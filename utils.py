@@ -296,6 +296,19 @@ def get_qconfig(weight_bw, pot):
 
 def attach_qconfig(args, model):
     qcfg, qcfg_8bit = get_qconfig(args.bitwidth, args.pot)
-    model.qconfig = qcfg
-    model.classifier.qconfig = qcfg_8bit
-    model.features[0][0].qconfig = qcfg_8bit
+    if "mobilenetv2" in args.model:
+        model.qconfig = qcfg
+        model.conv_stem.qconfig = qcfg_8bit
+        model.classifier.qconfig = qcfg_8bit
+    elif args.model == 'mobilenet_v2':
+        model.qconfig = qcfg
+        model.classifier.qconfig = qcfg_8bit
+        model.features[0][0].qconfig = qcfg_8bit
+    else:
+        raise NotImplementedError("wrong")
+
+    from kqat.quant.intrinsic import ConvBnReLU2d, ConvBn2d, ConvBnReLU2dC, ConvBn2dC
+    for mod in model.modules():
+        if isinstance(mod, (ConvBnReLU2d, ConvBn2d, ConvBnReLU2dC, ConvBn2dC)):
+            if mod.groups == mod.out_channels:
+                mod.qconfig = qcfg_8bit
