@@ -22,6 +22,7 @@ from optim.optim_factory import create_optimizer_rcf, create_optimizer
 
 from timm.data import Dataset, create_loader
 from timm.scheduler import create_scheduler
+from timm.loss import LabelSmoothingCrossEntropy
 
 
 def train_one_epoch(model, criterion, optimizer, optimizer_rcf, data_loader, device, epoch, print_freq,
@@ -179,7 +180,7 @@ def main(args):
     if args.distributed and args.sync_bn:
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
 
-    criterion = nn.CrossEntropyLoss()
+    criterion = LabelSmoothingCrossEntropy(smoothing=0.1).cuda()
 
     if args.qat:
         optimizer, optimizer_rcf = create_optimizer_rcf(args, model)
