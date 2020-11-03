@@ -26,7 +26,7 @@ from timm.loss import LabelSmoothingCrossEntropy
 
 
 def train_one_epoch(model, criterion, optimizer, optimizer_rcf, data_loader, device, epoch, print_freq,
-                    lr_scheduler=None, lr_scheduler_rcf=None, apex=False):
+                    freeze_handle=None, lr_scheduler=None, lr_scheduler_rcf=None, apex=False):
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value}'))
@@ -67,6 +67,11 @@ def train_one_epoch(model, criterion, optimizer, optimizer_rcf, data_loader, dev
 
         if lr_scheduler_rcf is not None:
             lr_scheduler_rcf.step_update(num_updates=num_updates)
+
+        if freeze_handle is not None:
+             freeze_handle.collect_batch(model, optimizer_rcf)
+             if num_updates % args.freeze_freq == 0:
+                 freeze_handle.trigger_batch(model, epoch, None)
 
 
 def evaluate(model, criterion, data_loader, device, print_freq=100):
@@ -184,9 +189,13 @@ def main(args):
 
     if args.qat:
         optimizer, optimizer_rcf = create_optimizer_rcf(args, model)
+        freeze_rcf = kqat.FreezeRCFKneron(decay=0.9)
+        freeze_handle = kqat.FrozenBase(args.procedure, freeze_rcf)
+
     else:
         optimizer = create_optimizer(args, model)
         optimizer_rcf = None
+        freeze_handle = None
 
     if args.apex:
         model, optimizer = amp.initialize(model, optimizer,
@@ -222,10 +231,13 @@ def main(args):
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             loader_train.sampler.set_epoch(epoch)
+        if freeze_handle is not None:
+            freeze_handle.trigger(model, epoch)
         train_one_epoch(model, criterion, optimizer, optimizer_rcf, loader_train, device,
-                        epoch, args.print_freq, lr_scheduler, lr_scheduler_rcf, args.apex)
+                        epoch, args.print_freq, freeze_handle, lr_scheduler, lr_scheduler_rcf, args.apex)
         lr_scheduler.step(epoch + 1)
-        lr_scheduler_rcf.step(epoch + 1)
+        if lr_scheduler_rcf is not None:
+            lr_scheduler_rcf.step(epoch + 1)
         evaluate(model, criterion, loader_eval, device=device)
         if args.output_dir:
             checkpoint = {
@@ -373,6 +385,9 @@ def parse_args():
     parser.add_argument('--bitwidth', type=int, default=8)
     parser.add_argument('--pot', action='store_true', default=False)
     parser.add_argument('--two-pass', action='store_true', default=False)
+    parser.add_argument('--procedure', default='2d,5p', type=str, metavar='P',
+                        help='freeze procedure (default: "2d,5p"')
+    parser.add_argument('--freeze_freq', type=int, default=50)
 
     args = parser.parse_args()
 
