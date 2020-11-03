@@ -185,7 +185,7 @@ class DepthwiseSeparableConv(nn.Module):
 
         # add quantization
         if self.has_residual:
-            self.plus = torch.nn.quantized.FloatFunctional()
+            # self.plus = torch.nn.quantized.FloatFunctional()
             self.scale = nn.Parameter(torch.tensor(1.0, dtype=torch.float))
             self._register_load_state_dict_pre_hook(fix_missing)
 
@@ -268,7 +268,7 @@ class InvertedResidual(nn.Module):
 
         # add quantization
         if self.has_residual:
-            self.plus = torch.nn.quantized.FloatFunctional()
+            # self.plus = torch.nn.quantized.FloatFunctional()
             self.scale = nn.Parameter(torch.tensor(1.0, dtype=torch.float))
             self._register_load_state_dict_pre_hook(fix_missing)
 
