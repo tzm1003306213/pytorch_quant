@@ -267,7 +267,8 @@ def get_qconfig(weight_bw, pot):
     )
 
     rcf_weight = kqat.RCF.with_args(
-        qscheme=torch.per_tensor_symmetric,
+        # qscheme=torch.per_tensor_symmetric,
+        qscheme=torch.per_channel_symmetric,
         alpha=5.0,
         alpha_init=kqat.RCFInit.RT_3STD,
         bw=weight_bw,
@@ -277,7 +278,8 @@ def get_qconfig(weight_bw, pot):
 
 
     rcf_weight_8bit = kqat.RCF.with_args(
-        qscheme=torch.per_tensor_symmetric,
+        # qscheme=torch.per_tensor_symmetric,
+        qscheme=torch.per_channel_symmetric,
         alpha=5.0,
         alpha_init=kqat.RCFInit.RT_3STD,
         bw=8,
