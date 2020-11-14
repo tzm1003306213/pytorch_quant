@@ -262,7 +262,7 @@ def get_qconfig(weight_bw, pot):
         alpha=10.0,
         alpha_init=kqat.RCFInit.BN_3STD,
         bw=8,
-        is_weight=True,
+        is_weight=False,
         alpha_pot=pot,
         decay=0.9
     )
