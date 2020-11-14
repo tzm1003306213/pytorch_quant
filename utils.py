@@ -263,7 +263,8 @@ def get_qconfig(weight_bw, pot):
         alpha_init=kqat.RCFInit.BN_3STD,
         bw=8,
         is_weight=True,
-        alpha_pot=pot
+        alpha_pot=pot,
+        decay=0.9
     )
 
     rcf_weight = kqat.RCF.with_args(
@@ -273,7 +274,8 @@ def get_qconfig(weight_bw, pot):
         alpha_init=kqat.RCFInit.RT_3STD,
         bw=weight_bw,
         is_weight=True,
-        alpha_pot=pot
+        alpha_pot=pot,
+        decay=0.9
     )
 
 
@@ -284,7 +286,8 @@ def get_qconfig(weight_bw, pot):
         alpha_init=kqat.RCFInit.RT_3STD,
         bw=8,
         is_weight=True,
-        alpha_pot=pot
+        alpha_pot=pot,
+        decay=0.9
     )
 
     qcfg = kqat.KQConfig(
